@@ -65,12 +65,11 @@ export const Hero: React.FC = () => {
             transition={{ duration: 0.8, delay: 0.2 }}
             className="flex-1 relative hidden lg:block"
           >
-            <img 
-              src="/src/assets/logo_large.png" 
-              alt="Oportuniza Illustration" 
+            <img
+              src="/Logo.png"
+              alt="Oportuniza logo"
               className="w-full max-w-lg mx-auto drop-shadow-2xl"
               onError={(e) => {
-                // Fallback to the SVG if image not found
                 e.currentTarget.style.display = 'none';
                 e.currentTarget.parentElement?.querySelector('.svg-fallback')?.classList.remove('hidden');
               }}
