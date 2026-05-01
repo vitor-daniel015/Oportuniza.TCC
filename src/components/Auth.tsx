@@ -16,7 +16,7 @@ export const Auth: React.FC<{ onBack: () => void, onSuccess: (role: string) => v
   };
 
   return (
-    <div className="fixed inset-0 z-60 bg-white flex flex-col md:flex-row overflow-hidden font-sans">
+    <div className="fixed inset-0 z-[60] bg-white flex flex-col md:flex-row overflow-hidden font-sans">
       {/* Left Side: Branding and Illustration */}
       <div className="md:w-[45%] bg-brand-blue-depth relative p-8 md:p-12 flex flex-col">
         <button 
@@ -156,7 +156,7 @@ export const Auth: React.FC<{ onBack: () => void, onSuccess: (role: string) => v
               </div>
             )}
 
-            <button type="submit" className="w-full bg-linear-to-r from-brand-blue-depth to-brand-green-sprout text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 group">
+            <button type="submit" className="w-full bg-gradient-to-r from-brand-blue-depth to-brand-green-sprout text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 group">
               {mode === 'login' ? 'Entrar na Conta' : 'Criar Conta'}
               <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
             </button>

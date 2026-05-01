@@ -14,7 +14,7 @@ export const Home: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar onAuthClick={() => navigate('/auth')} />
-      <main className="grow">
+      <main className="flex-grow">
         <Hero />
         <SearchBar />
         <Features />
