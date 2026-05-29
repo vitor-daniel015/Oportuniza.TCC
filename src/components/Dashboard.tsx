@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Search, ChevronRight, User, History, Briefcase, Star, Send, X, MapPin, CheckCircle, Plus, LayoutDashboard, Settings, LogOut, Phone } from 'lucide-react';
 import { ProfessionalCard } from './ProfessionalList';
 import { ProfessionalProfile } from './ProfessionalProfile';
-import { mockProfessionals, mockOpportunities as initialOpportunities } from '../mockData';
-import { Opportunity, Professional } from '../types';
+import { dbService, authService, isSupabaseConfigured } from '../lib/supabaseClientService';
+import { Opportunity, Professional, User as UserType } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Logo } from './ui/Logo';
 import { getGeolocation, calculateMatchingScore, verifyRating } from '../services/userService';
@@ -134,7 +134,7 @@ export const PostServiceModal: React.FC<{ onClose: () => void, onPost: (service:
     );
 };
 
-export const ProfileSideCard: React.FC<{ user: any, onClose: () => void, onLogout: () => void }> = ({ user, onClose, onLogout }) => {
+export const ProfileSideCard: React.FC<{ user: any, onClose: () => void, onLogout: () => void, onViewMyProfile?: () => void }> = ({ user, onClose, onLogout, onViewMyProfile }) => {
     return (
         <div className="fixed inset-0 z-[150] pointer-events-none">
             <motion.div 
@@ -158,7 +158,7 @@ export const ProfileSideCard: React.FC<{ user: any, onClose: () => void, onLogou
                 <div className="px-10 pb-10 flex-grow overflow-y-auto">
                     <div className="relative -mt-16 mb-8 inline-block">
                         <img 
-                            src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop" 
+                            src={user.role === 'professional' ? "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=200&auto=format&fit=crop" : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop"} 
                             className="w-32 h-32 rounded-3xl object-cover border-4 border-white shadow-xl"
                             alt="Profile" 
                         />
@@ -167,8 +167,10 @@ export const ProfileSideCard: React.FC<{ user: any, onClose: () => void, onLogou
                         </div>
                     </div>
 
-                    <h2 className="text-3xl font-bold text-text-title tracking-tight mb-1">Darcy Carriel</h2>
-                    <p className="text-brand-green-sprout font-bold uppercase tracking-widest text-xs mb-8">Profissional Verificado</p>
+                    <h2 className="text-3xl font-bold text-text-title tracking-tight mb-1">{user.name}</h2>
+                    <p className="text-brand-green-sprout font-bold uppercase tracking-widest text-xs mb-8">
+                        {user.role === 'professional' ? 'Prestador Verificado' : 'Contratante Verificado'}
+                    </p>
 
                     <div className="space-y-6">
                         <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
@@ -178,8 +180,8 @@ export const ProfileSideCard: React.FC<{ user: any, onClose: () => void, onLogou
                             </div>
                             <div className="space-y-3">
                                 <div className="flex justify-between text-xs">
-                                    <span className="text-text-secondary">Serviços Concluídos</span>
-                                    <span className="font-bold text-brand-blue-depth">124</span>
+                                    <span className="text-text-secondary">Serviços {user.role === 'professional' ? 'Concluídos' : 'Contratados'}</span>
+                                    <span className="font-bold text-brand-blue-depth">{user.role === 'professional' ? '124' : '15'}</span>
                                 </div>
                                 <div className="flex justify-between text-xs">
                                     <span className="text-text-secondary">Avaliação Média</span>
@@ -189,10 +191,16 @@ export const ProfileSideCard: React.FC<{ user: any, onClose: () => void, onLogou
                         </div>
 
                         <div className="space-y-2">
-                             <button className="w-full flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-body group">
+                             <button 
+                                onClick={() => {
+                                    onClose();
+                                    if (onViewMyProfile) onViewMyProfile();
+                                }}
+                                className="w-full flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-body group text-left animate-none"
+                             >
                                 <div className="flex items-center gap-3">
                                     <User size={20} className="text-brand-blue-depth" />
-                                    Editar Perfil
+                                    <span>{user.role === 'professional' ? 'Visualizar Meu Perfil Público' : 'Editar Perfil'}</span>
                                 </div>
                                 <ChevronRight size={18} className="text-gray-300 group-hover:text-brand-blue-depth" />
                              </button>
@@ -229,19 +237,47 @@ export const Dashboard: React.FC<{ userRole: 'client' | 'professional' | 'visito
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showPostModal, setShowPostModal] = useState(false);
-  const [opportunities, setOpportunities] = useState(initialOpportunities);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   const [category, setCategory] = useState('Pedreiro');
   const [showMap, setShowMap] = useState(false);
   const [location, setLocation] = useState('Carregando localização...');
 
   useEffect(() => {
+    // Get location
     getGeolocation().then(data => {
         setLocation(data.address);
     });
+
+    // Get current logged-in user profile
+    const loggedUser = authService.getCurrentUser();
+    setCurrentUser(loggedUser);
+
+    // Load dynamic professionals list from DB
+    dbService.getProfessionals().then(data => {
+      setProfessionals(data);
+    });
+
+    // Load dynamic opportunities list from DB
+    dbService.getOpportunities().then(data => {
+      setOpportunities(data);
+    });
   }, []);
 
-  const handlePostService = (newService: any) => {
-    setOpportunities([newService, ...opportunities]);
+  const handlePostService = async (newService: any) => {
+    const opp = {
+      title: newService.title,
+      description: newService.description,
+      price: newService.price,
+      location: newService.location,
+      imageUrl: newService.imageUrl,
+      category: newService.category,
+      clientId: currentUser?.id || 'client_1',
+      status: 'open' as const
+    };
+    const saved = await dbService.addOpportunity(opp);
+    setOpportunities(prev => [saved, ...prev]);
     setShowPostModal(false);
     setActiveTab('jobs');
   };
@@ -267,6 +303,7 @@ export const Dashboard: React.FC<{ userRole: 'client' | 'professional' | 'visito
                 <ProfessionalProfile 
                     professional={selectedProfessional} 
                     onContact={handleWhatsAppProf}
+                    userRole={userRole}
                 />
             </div>
         );
@@ -380,6 +417,28 @@ export const Dashboard: React.FC<{ userRole: 'client' | 'professional' | 'visito
                     </div>
                 </div>
 
+                {/* Simulated Provider Dashboard Banner */}
+                {userRole === 'professional' && (
+                  <div className="bg-gradient-to-r from-brand-blue-depth to-[#1e486e] p-8 rounded-[2rem] text-white mb-10 shadow-lg flex flex-col md:flex-row justify-between items-center gap-6 border border-white/5 relative overflow-hidden">
+                    <div className="relative z-10">
+                      <span className="bg-brand-green-sprout text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md">Ative seu Perfil</span>
+                      <h3 className="text-xl font-bold mt-2 mb-1">Seja bem-vinda de volta ao Oportuniza, {currentUser?.name || 'Darcy'}!</h3>
+                      <p className="text-xs text-gray-200">Como prestadora de serviços, você pode personalizar as suas fotos de portfólio, sua descrição de apresentação e responder as avaliações no mural oficial.</p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const me = professionals.find(p => p.id === currentUser?.id) || professionals.find(p => p.id === '6') || professionals[0];
+                        if (me) setSelectedProfessional(me);
+                      }}
+                      className="bg-brand-green-sprout hover:bg-[#3d8349] text-white font-black text-xs py-3.5 px-6 rounded-xl uppercase tracking-widest shrink-0 transition-all shadow-md active:scale-95 z-10"
+                    >
+                      Acessar Meu Perfil Público
+                    </button>
+                    {/* Decorative bubble background */}
+                    <div className="absolute right-0 bottom-0 w-48 h-48 bg-white/5 rounded-full translate-y-12 translate-x-12 shrink-0 pointer-events-none" />
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center mb-8">
                     <div className="flex items-center gap-3">
                         <h2 className="text-3xl font-black text-text-title tracking-tight">Recomendados</h2>
@@ -388,77 +447,24 @@ export const Dashboard: React.FC<{ userRole: 'client' | 'professional' | 'visito
                             {location}
                         </div>
                     </div>
-                    <div className="flex bg-gray-200 p-1 rounded-xl">
-                        <button 
-                            onClick={() => setShowMap(false)}
-                            className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${!showMap ? 'bg-white text-brand-blue-depth shadow-sm' : 'text-text-secondary'}`}
-                        >
-                            Lista
-                        </button>
-                        <button 
-                            onClick={() => setShowMap(true)}
-                            className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${showMap ? 'bg-white text-brand-blue-depth shadow-sm' : 'text-text-secondary'}`}
-                        >
-                            Mapa
-                        </button>
-                    </div>
                 </div>
 
-                {showMap ? (
-                    <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl border border-gray-100 h-[650px] relative">
-                         <img 
-                            src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?q=80&w=1200&auto=format&fit=crop" 
-                            className="w-full h-full object-cover opacity-80 mix-blend-multiply bg-brand-blue-depth/10" 
-                            alt="Map Placeholder"
-                        />
-                        <div className="absolute inset-0 p-8">
-                             {mockProfessionals.map((p, i) => (
-                                <motion.div 
-                                    key={p.id}
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    transition={{ delay: i * 0.1 }}
-                                    style={{ 
-                                        left: `${25 + (i * 12)}%`, 
-                                        top: `${35 + (i * 10)}%` 
-                                    }}
-                                    className="absolute group"
-                                >
-                                    <div className="relative">
-                                        <div className="bg-brand-blue-depth text-white p-2 rounded-2xl shadow-xl cursor-pointer hover:scale-110 transition-transform flex items-center gap-3">
-                                            <img src={p.imageUrl} className="w-8 h-8 rounded-full border-2 border-white/20" />
-                                            <div className="pr-2">
-                                                <p className="text-[10px] font-black leading-none">{p.name}</p>
-                                                <p className="text-[8px] text-white/60 font-bold uppercase">{p.specialty}</p>
-                                            </div>
-                                        </div>
-                                        <div className="w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-t-[10px] border-t-brand-blue-depth mx-auto -mt-1" />
-                                    </div>
-                                    
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 bg-white p-5 rounded-[1.5rem] shadow-2xl border border-gray-100 w-56 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                        <p className="font-black text-xs mb-1 text-text-title">{p.name}</p>
-                                        <p className="text-[10px] text-text-secondary mb-3 font-medium">{p.description.substring(0, 50)}...</p>
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-1">
-                                                <Star size={12} className="fill-brand-blue-depth text-brand-blue-depth" />
-                                                <span className="text-xs font-black">{p.rating}</span>
-                                            </div>
-                                            <span className="text-[10px] font-black text-brand-green-sprout uppercase">Ver Perfil</span>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                             ))}
-                        </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                {professionals
+                  .filter(p => !category || p.specialty === category || (category === 'Efetiva' && p.specialty === 'Governança'))
+                  .map((prof) => (
+                    <div key={prof.id} onClick={() => setSelectedProfessional(prof)} className="cursor-pointer">
+                        <ProfessionalCard professional={prof} />
                     </div>
-                ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                    {mockProfessionals.map((prof) => (
-                        <div key={prof.id} onClick={() => setSelectedProfessional(prof)} className="cursor-pointer">
-                            <ProfessionalCard professional={prof} />
-                        </div>
-                    ))}
-                    </div>
+                ))}
+                {professionals.filter(p => !category || p.specialty === category || (category === 'Efetiva' && p.specialty === 'Governança')).length === 0 && (
+                  <div className="col-span-full bg-white rounded-[2.5rem] p-12 text-center border border-gray-100 shadow-xl flex flex-col items-center justify-center">
+                    <User size={48} className="text-brand-green-sprout mb-4 animate-pulse" />
+                    <h4 className="text-xl font-bold text-text-title mb-2">Sem profissionais ativos</h4>
+                    <p className="text-text-secondary text-sm max-w-md">Não há profissionais cadastrados na categoria "{category}" no momento. Crie uma nova oportunidade ou explore outras especialidades.</p>
+                  </div>
                 )}
+                </div>
               </>
             ) : (
               <div className="max-w-5xl mx-auto">
@@ -496,18 +502,23 @@ export const Dashboard: React.FC<{ userRole: 'client' | 'professional' | 'visito
             <div className="hidden md:flex items-center gap-12">
                <button 
                 onClick={() => {setActiveTab('main'); setSelectedProfessional(null);}} 
-                className={`flex items-center gap-2 font-black uppercase tracking-widest text-xs transition-colors ${activeTab === 'main' ? 'text-brand-blue-depth' : 'text-text-secondary hover:text-brand-blue-depth'}`}
+                className={`flex items-center gap-2 font-black uppercase tracking-widest text-xs transition-colors ${activeTab === 'main' && !selectedProfessional ? 'text-brand-blue-depth' : 'text-text-secondary hover:text-brand-blue-depth'}`}
                >
                 <LayoutDashboard size={18} />
                 Explorar
                </button>
-               <button 
-                onClick={() => {setActiveTab('jobs'); setSelectedProfessional(null);}} 
-                className={`flex items-center gap-2 font-black uppercase tracking-widest text-xs transition-colors ${activeTab === 'jobs' ? 'text-brand-blue-depth' : 'text-text-secondary hover:text-brand-blue-depth'}`}
-               >
-                <Briefcase size={18} />
-                Serviços
-               </button>
+               {userRole === 'professional' ? (
+                 <button 
+                  onClick={() => {
+                    const me = professionals.find(p => p.id === currentUser?.id) || professionals.find(p => p.id === '6') || professionals[0];
+                    if (me) setSelectedProfessional(me);
+                  }} 
+                  className={`flex items-center gap-2 font-black uppercase tracking-widest text-xs transition-colors ${selectedProfessional?.id === (currentUser?.id || '6') ? 'text-brand-blue-depth' : 'text-text-secondary hover:text-brand-blue-depth'}`}
+                 >
+                  <User size={18} />
+                  Meu Perfil
+                 </button>
+               ) : null}
                <button 
                 onClick={() => {setActiveTab('history'); setSelectedProfessional(null);}} 
                 className={`flex items-center gap-2 font-black uppercase tracking-widest text-xs transition-colors ${activeTab === 'history' ? 'text-brand-blue-depth' : 'text-text-secondary hover:text-brand-blue-depth'}`}
@@ -523,11 +534,11 @@ export const Dashboard: React.FC<{ userRole: 'client' | 'professional' | 'visito
                     className="flex items-center gap-4 group"
                >
                   <div className="text-right">
-                    <p className="text-sm font-black text-text-title leading-none">Darcy Carriel</p>
-                    <p className="text-[10px] text-brand-green-sprout font-black uppercase tracking-widest mt-1">{userRole}</p>
+                    <p className="text-sm font-black text-text-title leading-none">{currentUser?.name || 'Visitante'}</p>
+                    <p className="text-[10px] text-brand-green-sprout font-black uppercase tracking-widest mt-1">{userRole === 'professional' ? 'Prestador' : 'Cliente'}</p>
                   </div>
                   <div className="w-14 h-14 rounded-2xl bg-brand-blue-depth flex items-center justify-center text-white shadow-xl shadow-brand-blue-depth/20 group-hover:scale-105 transition-transform overflow-hidden border-2 border-white">
-                    <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=100&auto=format&fit=crop" className="w-full h-full object-cover" alt="Me" />
+                    <img src={userRole === 'professional' ? "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=150" : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150"} className="w-full h-full object-cover" alt="Me" />
                   </div>
                </button>
             </div>
@@ -555,9 +566,13 @@ export const Dashboard: React.FC<{ userRole: 'client' | 'professional' | 'visito
       <AnimatePresence>
         {showProfile && (
             <ProfileSideCard 
-                user={{ name: 'Darcy Carriel', role: userRole }} 
+                user={{ name: currentUser?.name || 'Visitante', role: userRole }} 
                 onClose={() => setShowProfile(false)} 
                 onLogout={onLogout}
+                onViewMyProfile={() => {
+                    const me = professionals.find(p => p.id === currentUser?.id) || professionals.find(p => p.id === '6') || professionals[0];
+                    if (me) setSelectedProfessional(me);
+                }}
             />
         )}
       </AnimatePresence>
@@ -574,8 +589,18 @@ export const Dashboard: React.FC<{ userRole: 'client' | 'professional' | 'visito
 
       {/* Mobile Bottom Nav */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex justify-around py-5 z-[100] rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-            <button onClick={() => {setActiveTab('main'); setSelectedProfessional(null);}} className={`p-2 transition-all ${activeTab === 'main' ? 'text-brand-blue-depth scale-125' : 'text-gray-300'}`}><LayoutDashboard size={26} /></button>
-            <button onClick={() => {setActiveTab('jobs'); setSelectedProfessional(null);}} className={`p-2 transition-all ${activeTab === 'jobs' ? 'text-brand-blue-depth scale-125' : 'text-gray-300'}`}><Briefcase size={26} /></button>
+            <button onClick={() => {setActiveTab('main'); setSelectedProfessional(null);}} className={`p-2 transition-all ${activeTab === 'main' && !selectedProfessional ? 'text-brand-blue-depth scale-125' : 'text-gray-300'}`}><LayoutDashboard size={26} /></button>
+            {userRole === 'professional' && (
+              <button 
+                onClick={() => {
+                  const me = professionals.find(p => p.id === currentUser?.id) || professionals.find(p => p.id === '6') || professionals[0];
+                  if (me) setSelectedProfessional(me);
+                }} 
+                className={`p-2 transition-all ${selectedProfessional?.id === (currentUser?.id || '6') ? 'text-brand-blue-depth scale-125' : 'text-gray-300'}`}
+              >
+                <User size={26} />
+              </button>
+            )}
             <button onClick={() => {setActiveTab('history'); setSelectedProfessional(null);}} className={`p-2 transition-all ${activeTab === 'history' ? 'text-brand-blue-depth scale-125' : 'text-gray-300'}`}><History size={26} /></button>
             <button onClick={() => setShowProfile(true)} className="p-2 text-gray-300"><Settings size={26} /></button>
       </div>

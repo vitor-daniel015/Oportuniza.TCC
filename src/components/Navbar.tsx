@@ -9,7 +9,6 @@ export const Navbar: React.FC<{ onAuthClick: () => void }> = ({ onAuthClick }) =
   const navLinks = [
     { name: 'Início', href: '#' },
     { name: 'Sobre Nós', href: '#' },
-    { name: 'Serviço', href: '#' },
     { name: 'Contato', href: '#' },
   ];
 

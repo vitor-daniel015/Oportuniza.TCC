@@ -55,3 +55,20 @@ export interface Step {
   description: string;
   iconName: string;
 }
+
+export interface Review {
+  id: string;
+  professionalId: string;
+  reviewerName: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+}
+
+export interface ReviewReply {
+  id: string;
+  reviewId: string;
+  replierName: string;
+  message: string;
+  createdAt: string;
+}
